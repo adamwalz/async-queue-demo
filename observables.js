@@ -1,95 +1,94 @@
-var Observable = require('rx').Observable;
+'use strict';
 
-var maxConcurrent = 1;
+const Observable = require('rx').Observable;
 
-var tasks = [];
-var pendingTasks = 0;
+var queue = (function() {
+  const MAX_CONCURRENT = 1;
 
-function doAsap(operation) {
-  return Observable.create(function(observer) {
-    tasks.push({
-      operation: operation,
-      observer: observer
+  var tasks = [];
+  var pendingTasks = 0;
+
+  function doAsap(operation) {
+    return Observable.create(function(observer) {
+      var task = { operation, observer };
+      tasks.push(task);
+      dequeue();
     });
-    dequeue();
-  });
-}
-
-function doLater(operation) {
-  return Observable.create(function(observer) {
-    tasks.unshift({
-      operation: operation,
-      observer: observer
-    });
-    dequeue();
-  });
-}
-
-function dequeue() {
-  if (pendingTasks >= maxConcurrent) {
-    return;
   }
 
-  var task = tasks.pop();
-  if (!task) {
-    return;
+  function doLater(operation) {
+    return Observable.create(function(observer) {
+      var task = { operation, observer };
+      tasks.unshift(task);
+      dequeue();
+    });
   }
 
-  pendingTasks += 1;
-  Observable.create(function(observer) {
-    setTimeout(function() {
-      observer.onNext(task.operation());
-      observer.onCompleted();
-    }, 2000);
-  })
-    .subscribe(
-      function(operationNumber) {
-        task.observer.onNext(operationNumber);
-      },
-      function(err) {
-        task.observer.onError(err);
-        pendingTasks -= 1;
-        dequeue();
-      },
-      function() {
-        task.observer.onCompleted();
-        pendingTasks -= 1;
-        dequeue();
-      });
-}
+  function dequeue() {
+    if (pendingTasks >= MAX_CONCURRENT) {
+      return;
+    }
 
-doLater(function() {
+    let task = tasks.pop();
+    if (!task) {
+      return;
+    }
+
+    pendingTasks += 1;
+    Observable.create(function(observer) {
+        setTimeout(function() {
+          observer.onNext(task.operation());
+          observer.onCompleted();
+          pendingTasks -= 1;
+          dequeue();
+        }, 2000);
+      })
+      .subscribe(
+        operationNumber =>task.observer.onNext(operationNumber),
+        err => task.observer.onError(err),
+        () => task.observer.onCompleted()
+      );
+  }
+
+  return {
+    doAsap,
+    doLater
+  };
+
+})();
+
+queue.doLater(function() {
   console.log('This is operation 1. Do it later');
   return 1;
 }).subscribe(onOperationCompleted, onOperationError);
 
-doLater(function() {
+queue.doLater(function() {
   console.log('This is operation 2. Do it later');
   return 2;
 }).subscribe(onOperationCompleted, onOperationError);
 
-doAsap(function() {
+queue.doAsap(function() {
   console.log('This is operation 3. Do it asap');
   return 3;
 }).subscribe(onOperationCompleted, onOperationError);
 
-doLater(function() {
+queue.doLater(function() {
   console.log('This is operation 4. Do it later');
   return 4;
 }).subscribe(onOperationCompleted, onOperationError);
 
-doAsap(function() {
+queue.doAsap(function() {
   console.log('This is operation 5. Do it asap');
   return 5;
 }).subscribe(onOperationCompleted, onOperationError);
 
-doAsap(function() {
+queue.doAsap(function() {
   console.log('This is operation 6. Do it asap');
   return 6;
 }).subscribe(onOperationCompleted, onOperationError);
 
 setTimeout(function() {
-  doAsap(function() {
+  queue.doAsap(function() {
     console.log('This is operation 7. Do it asap');
     return 7;
   }).subscribe(onOperationCompleted, onOperationError);

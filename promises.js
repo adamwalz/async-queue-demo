@@ -1,91 +1,87 @@
-var maxConcurrent = 1;
+'use strict';
 
-var pendingTasks = 0;
+var queue = (function() {
+  const MAX_CONCURRENT = 1;
 
-var tasks = []; // queue
+  var pendingTasks = 0;
 
-function doAsap(operation) {
-  return new Promise(function(resolve, reject) {
-    tasks.push({
-      operation: operation,
-      resolve: resolve,
-      reject: reject
-    });
-    dequeue();
-  });
-}
+  var tasks = []; // queue
 
-function doLater(operation) {
-  return new Promise(function(resolve, reject) {
-    tasks.unshift({
-      operation: operation,
-      resolve: resolve,
-      reject: reject
-    });
-    dequeue();
-  });
-}
-
-function dequeue() {
-  if (pendingTasks >= maxConcurrent) {
-    return;
-  }
-
-  var task = tasks.pop();
-  if (!task) {
-    return;
-  }
-
-  pendingTasks += 1;
-  new Promise(function(resolve) {
-    setTimeout(function() {
-      resolve(task.operation());
-    }, 2000);
-  })
-    .then(function(operationNumber) {
-      task.resolve(operationNumber);
-      pendingTasks -= 1;
+  function doAsap(operation) {
+    return new Promise(function(resolve, reject) {
+      tasks.push({ operation, resolve, reject });
       dequeue();
+    });
+  }
+
+  function doLater(operation) {
+    return new Promise(function(resolve, reject) {
+      tasks.unshift({ operation, resolve, reject });
+      dequeue();
+    });
+  }
+
+  function dequeue() {
+    if (pendingTasks >= MAX_CONCURRENT) {
+      return;
+    }
+
+    let task = tasks.pop();
+    if (!task) {
+      return;
+    }
+
+    pendingTasks += 1;
+    new Promise(function(resolve) {
+      setTimeout(function() {
+        resolve(task.operation());
+        pendingTasks -= 1;
+        dequeue();
+      }, 2000);
     })
-    .catch(function(err) {
-      task.reject(err);
-      pendingTasks -= 1;
-      dequeue();
-    });
-}
+    .then(operationNumber => task.resolve(operationNumber))
+    .catch(err => task.reject(err));
+  }
 
-doLater(function() {
+  return {
+    doAsap,
+    doLater
+  };
+
+})();
+
+queue.doLater(function() {
   console.log('This is operation 1. Do it later');
   return 1;
 }).then(onOperationCompleted, onOperationError);
 
-doLater(function() {
+queue.doLater(function() {
   console.log('This is operation 2. Do it later');
   return 2;
 }).then(onOperationCompleted, onOperationError);
 
-doAsap(function() {
+queue.doAsap(function() {
   console.log('This is operation 3. Do it asap');
   return 3;
 }).then(onOperationCompleted, onOperationError);
 
-doLater(function() {
+queue.doLater(function() {
   console.log('This is operation 4. Do it later');
   return 4;
 }).then(onOperationCompleted, onOperationError);
 
-doAsap(function() {
+queue.doAsap(function() {
   console.log('This is operation 5. Do it asap');
   return 5;
 }).then(onOperationCompleted, onOperationError);
 
-doAsap(function() {
+queue.doAsap(function() {
   console.log('This is operation 6. Do it asap');
   return 6;
 }).then(onOperationCompleted, onOperationError);
 
 setTimeout(function() {
-  doAsap(function() {
+  queue.doAsap(function() {
     console.log('This is operation 7. Do it asap');
     return 7;
   }).then(onOperationCompleted, onOperationError);
