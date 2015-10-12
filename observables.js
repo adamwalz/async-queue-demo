@@ -13,6 +13,13 @@ var queue = (function() {
       var task = { operation, observer };
       tasks.push(task);
       dequeue();
+
+      return function onDisposed() {
+        var index = tasks.indexOf(task);
+        if (~index) {
+          tasks.splice(index, 1);
+        }
+      };
     });
   }
 
@@ -21,6 +28,13 @@ var queue = (function() {
       var task = { operation, observer };
       tasks.unshift(task);
       dequeue();
+
+      return function onDisposed() {
+        var index = tasks.indexOf(task);
+        if (~index) {
+          tasks.splice(index, 1);
+        }
+      };
     });
   }
 
@@ -67,7 +81,7 @@ queue.doLater(function() {
   return 2;
 }).subscribe(onOperationCompleted, onOperationError);
 
-queue.doAsap(function() {
+let disposable = queue.doAsap(function() {
   console.log('This is operation 3. Do it asap');
   return 3;
 }).subscribe(onOperationCompleted, onOperationError);
@@ -92,7 +106,9 @@ setTimeout(function() {
     console.log('This is operation 7. Do it asap');
     return 7;
   }).subscribe(onOperationCompleted, onOperationError);
-}, 10000);
+}, 8000);
+
+disposable.dispose();
 
 function onOperationCompleted(operationNumber) {
   console.log('Done with operation ' + operationNumber);
